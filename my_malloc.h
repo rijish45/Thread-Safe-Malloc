@@ -30,4 +30,12 @@ struct block_meta_data {
 typedef struct block_meta_data * block;
 
 
+//Thread-Safe Malloc functions
+
+
+void *ts_malloc_lock(size_t size);
+void ts_free_lock(void *ptr);
+
+
+
 #endif
