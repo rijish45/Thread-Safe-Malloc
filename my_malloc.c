@@ -1,31 +1,16 @@
-/*
-
-	Rijish Ganguly
-	ECE 650- System Programming
-	rg239
-
-*/
-
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <pthread.h>
-//#include <math.h>
 #include "my_malloc.h"
-
-
-pthread_mutex_t request_space_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t split = PTHREAD_MUTEX_INITIALIZER;
-
 
 
 
 //head of our linked list
 
 void * head = NULL;
-
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t extend_lock = PTHREAD_MUTEX_INITIALIZER;
 
 
 //We check if we have a free block and return it if it is available using the first-fit algorithm
@@ -88,12 +73,10 @@ sbrk(num) increments process data segment by num and returns a pointer to the pr
 block new_space(block last, size_t size){
 
 	block new_block;
-	
-	pthread_mutex_lock(&lock);
+	pthread_mutex_lock(&extend_lock);
 	new_block = sbrk(0); //current top of the heap
 	void * new_space = sbrk(size + BLOCK_SIZE);
-	pthread_mutex_unlock(&lock);
-	
+	pthread_mutex_unlock(&extend_lock);
 	if(new_space == (void*) - 1){
 		return NULL; //sbrk has failed
 	}
@@ -119,9 +102,7 @@ requested slot, it's better to split the block into two partitions */
 void split_block(block mblock, size_t size){
     
     if(mblock){ //if mblock is not NULL
-   
-    pthread_mutex_lock(&lock);
-	
+
 	block new_block = (void *)((void *)mblock + size + BLOCK_SIZE);
 	new_block->size = (mblock->size - size - BLOCK_SIZE);
 	new_block->next = mblock->next;
@@ -138,8 +119,6 @@ void split_block(block mblock, size_t size){
 		}
 	}
 
-	pthread_mutex_unlock(&lock);
-
 
 }
 
@@ -149,6 +128,7 @@ void split_block(block mblock, size_t size){
 //After that switched to immediate coalescing
 
 void coalesce(block my_block){
+  //The following two cases would be able to handle all merge conditions
 
  if(my_block->next){
 		if(my_block->next == (block)0x1){
@@ -180,9 +160,151 @@ void coalesce(block my_block){
 
 }
 
+//Function to get the total data segment size
+
+unsigned long get_data_segment_size(){
+unsigned long value = (unsigned long)(sbrk(0) - head); //sbrk(0) gives the current top of the heap
+return value;
+}
+
+
+//Function to get the total free segment size
+unsigned long get_data_segment_free_space_size(){
+block my_block = head;
+unsigned long size = 0; 
+	
+	while( my_block != NULL){  //We iterate through the entire data segment and add the blocks which are marked free
+         if(my_block->free){
+			size = size + my_block->size; //Keep on adding the free spaces
+        }
+       my_block = my_block->next;
+    }
+
+return size;
+
+}
+
+void * ts_malloc_lock(size_t size){
+
+pthread_mutex_lock(&lock);
+if( size <= 0){
+		
+	pthread_mutex_unlock(&lock);
+	return NULL;
+}
+
+	block my_block;
+	block last_block;
+
+	if(head == NULL){ //We are calling malloc for the first time, the head of the Linked List is NULL
+
+		my_block = new_space(NULL, size); //Request new space
+		if(!my_block){
+
+			pthread_mutex_unlock(&lock);
+			return NULL;
+		}
+		head = my_block; //Assign the head of the linked list
+	}
+
+	else{ //head is not NULL, malloc has been used atleast once
+
+			last_block = head;
+        	my_block = find_best_fit_block_BF(&last_block, size); //Search for the free block of memory
+
+
+			if(my_block != NULL){
+				if(my_block->size >= size + BLOCK_SIZE){ //If only the size of the block found is greater than the requirement we call the split_block function
+					split_block(my_block, size);
+				}
+			}
+
+			else{ //The case where no free block was found
+
+				my_block = new_space(last_block, size);
+				if(!my_block)
+					pthread_mutex_unlock(&lock);
+					return NULL;
+			}
+
+	}
+
+   pthread_mutex_unlock(&lock);
+   return (my_block + 1); //we return b + 1 because we want to return a pointer to the region after block_meta_data
+
+}
+
+
+
+void ts_free_malloc(void * ptr){
+
+    pthread_mutex_lock(&lock);
+	if (!ptr){
+	    //printf("Cannot free a null pointer.");
+	    pthread_mutex_unlock(&lock);
+		return;
+	}
+    
+    else {
+		
+		block block_ptr = get_ptr(ptr);
+		if(block_ptr){
+	  		block_ptr->free = 1; //free the block
+	  		coalesce(block_ptr); //merge the blocks
+	  		pthread_mutex_unlock(&lock);
+	  		return;
+		}
+	else //when the ptr is NULL
+		pthread_mutex_unlock(&lock);
+		return;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //Implement first-fit malloc now that we have our necessary helper functions
-
 void *ff_malloc(size_t size){
 
 	if( size <= 0){ //size has to be positive
@@ -230,7 +352,6 @@ void *ff_malloc(size_t size){
 
 
 //bf_malloc is almost the same as ff_malloc but it used different function to choose the block
-
 void *bf_malloc(size_t size){
 
 	if( size <= 0){
@@ -318,113 +439,6 @@ void bf_free(void * ptr){
 
 
 }
-
-//Function to get the total data segment size
-
-unsigned long get_data_segment_size(){
-
-unsigned long value = (unsigned long)(sbrk(0) - head); //sbrk(0) gives the current top of the heap
-return value;
-
-}
-
-
-//Function to get the total free segment size
-unsigned long get_data_segment_free_space_size(){
-    
-    block my_block = head;
-	unsigned long size = 0; 
-	
-	while( my_block != NULL){  //We iterate through the entire data segment and add the blocks which are marked free
-         if(my_block->free){
-			size = size + my_block->size; //Keep on adding the free spaces
-        }
-        
-        my_block = my_block->next;
-}
-
-return size;
-
-}
-
-
-void *ts_malloc_lock(size_t size){
-
-    pthread_mutex_lock(&lock); //initiate lock mechanism
-	
-	if( size <= 0){
-		pthread_mutex_unlock(&lock);
-		return NULL;
-	}
-
-	block my_block;
-	block last_block;
-
-	if(head == NULL){ //We are calling malloc for the first time, the head of the Linked List is NULL
-       
-        pthread_mutex_unlock(&lock);
-		//pthread_mutex_lock(&request_space_mutex);
-		my_block = new_space(NULL, size); //Request new space
-		head = my_block; //Assign the head of the linked list
-	}
-
-	else{ //head is not NULL, malloc has been used atleast once
-
-		    last_block = head;
-        	my_block = find_best_fit_block_BF(&last_block, size); //Search for the free block of memory
-			
-			if(my_block != NULL){
-				
-				pthread_mutex_unlock(&lock);
-				if(my_block->size >= size + BLOCK_SIZE){ //If only the size of the block found is greater than the requirement we call the split_block function
-					split_block(my_block, size);
-				}
-			}
-
-			else{ //The case where no free block was found
-				pthread_mutex_unlock(&lock);
-				my_block = new_space(last_block, size);
-			  }
-		}
-
-   
-   return (my_block + 1); //we return b + 1 because we want to return a pointer to the region after block_meta_data
-
-}
-
-
-void ts_free_lock(void *ptr){
-
-pthread_mutex_lock(&lock); //initiate locking mechanism
-
-if (!ptr){
-	    //printf("Cannot free a null pointer.");
-	    pthread_mutex_unlock(&lock);
-		return;
-}
-
-block block_ptr = get_ptr(ptr);
-
-else{
-
-	if(block_ptr){ //if not NULL
-	  pthread_mutex_unlock(&lock);
-	  block_ptr->free = 1; //free the block
-	  coalesce(block_ptr); //Do the merging of the blocks
-	}
-	else { //ptr is a NULL
-			pthread_mutex_unlock(&lock);
-			return;
-		}
-}
-
-};
-
-
-
-
-
-
 
 
 
