@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
 #include <unistd.h>
 #include "my_malloc.h"
 
@@ -122,6 +123,11 @@ void split_block(block mblock, size_t size){
 
 }
 
+//We need to get address of the struct i.e. where meta data is stored
+block get_ptr(void * ptr){
+  return((block)ptr -1);
+}
+
 
 //Combine free blocks of adjacent memory into a single memory chunk
 //Initially tried deffered coalescing, but it took a long time
@@ -187,11 +193,12 @@ return size;
 void * ts_malloc_lock(size_t size){
 
 pthread_mutex_lock(&lock);
-if( size <= 0){
+if( size <= 0){ //Requested size is less than zero
 		
 	pthread_mutex_unlock(&lock);
 	return NULL;
 }
+else { //Size is greater than zero
 
 	block my_block;
 	block last_block;
@@ -199,44 +206,55 @@ if( size <= 0){
 	if(head == NULL){ //We are calling malloc for the first time, the head of the Linked List is NULL
 
 		my_block = new_space(NULL, size); //Request new space
-		if(!my_block){
+		if(!my_block){ //if my_block is NULL
 
 			pthread_mutex_unlock(&lock);
 			return NULL;
 		}
-		head = my_block; //Assign the head of the linked list
+		else{ //my_block is not NULL
+			head = my_block; //Assign the head of the linked list
+			pthread_mutex_unlock(&lock);
+			return (my_block + 1);
+		}
 	}
 
 	else{ //head is not NULL, malloc has been used atleast once
 
 			last_block = head;
         	my_block = find_best_fit_block_BF(&last_block, size); //Search for the free block of memory
-
-
-			if(my_block != NULL){
+			if(my_block != NULL){ //suitable block is found
+				
 				if(my_block->size >= size + BLOCK_SIZE){ //If only the size of the block found is greater than the requirement we call the split_block function
 					split_block(my_block, size);
+					my_block->free = 0;
 				}
+				pthread_mutex_unlock(&lock);
+				return (my_block + 1);
 			}
 
 			else{ //The case where no free block was found
 
 				my_block = new_space(last_block, size);
-				if(!my_block)
+				if(!my_block){
 					pthread_mutex_unlock(&lock);
 					return NULL;
+				}
+				else {
+					pthread_mutex_unlock(&lock);
+					return my_block + 1;
+				}
+
 			}
 
 	}
 
-   pthread_mutex_unlock(&lock);
-   return (my_block + 1); //we return b + 1 because we want to return a pointer to the region after block_meta_data
+}
 
 }
 
 
 
-void ts_free_malloc(void * ptr){
+void ts_free_lock(void * ptr){
 
     pthread_mutex_lock(&lock);
 	if (!ptr){
@@ -245,7 +263,7 @@ void ts_free_malloc(void * ptr){
 		return;
 	}
     
-    else {
+    else { //valid ptr
 		
 		block block_ptr = get_ptr(ptr);
 		if(block_ptr){
@@ -254,52 +272,13 @@ void ts_free_malloc(void * ptr){
 	  		pthread_mutex_unlock(&lock);
 	  		return;
 		}
-	else //when the ptr is NULL
+	else{ //when the ptr is NULL
 		pthread_mutex_unlock(&lock);
 		return;
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
 
 
 
@@ -333,6 +312,7 @@ void *ff_malloc(size_t size){
 				if(my_block->size >= size + BLOCK_SIZE){ //If only the size of the block found is greater than the requirement we call the split_block function
 					split_block(my_block, size);
 				}
+				my_block->free = 0;
 			}
 
 			else{ //The case where no free block was found
@@ -396,11 +376,6 @@ void *bf_malloc(size_t size){
 
 }
 
-
-//We need to get address of the struct i.e. where meta data is stored
-block get_ptr(void * ptr){
-  return((block)ptr -1);
-}
 
 //Implementation of ff_free
 
