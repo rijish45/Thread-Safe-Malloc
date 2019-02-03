@@ -4,20 +4,12 @@
 #define BLOCK_SIZE sizeof(struct block_meta_data)
 
 
- //Best Fit malloc/free
-     void *bf_malloc(size_t size);
-     void bf_free(void *ptr);
-
- //First Fit malloc/free
-     void *ff_malloc(size_t size);
-     void ff_free(void *ptr);
-
-
 //Functions to calculate fragmentation
 unsigned long get_data_segment_size(); //total data segment in bytes
 unsigned long get_data_segment_free_space_size(); //free data segment in bytes
 
 
+//My data structure used for the implementation of malloc and free
 struct block_meta_data {
 
 	size_t size; //size of the block
@@ -29,17 +21,24 @@ struct block_meta_data {
 
 typedef struct block_meta_data * block;
 
-//Thread-Safe malloc with locks
-
+//Thread-Safe malloc and free with locks
 void *ts_malloc_lock(size_t size);
 void ts_free_lock(void *ptr);
 
 
-//Thread-safe malloc with no-locks
+//Thread-safe malloc  and free with no-locks
 void *ts_malloc_nolock(size_t size);
 void ts_free_nolock(void *ptr);
 
+//Searching the appropriate block using the Best-Fit memory allocation policy
+block find_best_fit_block_BF(block * last, size_t size);
+block find_best_fit_block_BF_NL(block * last, size_t size); //No-lock version
 
+
+//Other necessary functions to implement malloc and free
+block new_space(block last, size_t size);
+void split_block(block mblock, size_t size);
+void coalesce(block my_block)
 
 
 #endif

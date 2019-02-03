@@ -10,7 +10,7 @@
 //head of our linked list
 
 void * head = NULL;
-__thread block global_head = NULL;
+__thread block global_head = NULL; //one instance of global_head per thread
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t extend_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -33,10 +33,7 @@ block find_best_fit_block_BF(block * last, size_t size){
 		current = current->next; //normal iteration
 	} 
 
- 
-
-//Now assign the last block for requesting space in later situation
-
+ //Now assign the last block for requesting space in later situation
 current = head;
 //This loop is to assign the last node for requesting space
 while(current != NULL){
@@ -50,6 +47,7 @@ while(current != NULL){
 return current; //may return NULL
 }
 
+//Same as above, however we are using threa
 
 block find_best_fit_block_BF_NL(block * last, size_t size){
 
@@ -83,15 +81,9 @@ while(current != NULL){
 return current; //may return NULL
 }
 
-
-
-
-
-
 /* If we don't find a free block, then we need to request it from OS using sbrk
 sbrk(0) returns a pointer to the current top of the heap
 sbrk(num) increments process data segment by num and returns a pointer to the previous top of the heap before change */
-
 
 block new_space(block last, size_t size){
 
@@ -142,8 +134,8 @@ void split_block(block mblock, size_t size){
 		}
 	}
 
-
 }
+
 
 //We need to get address of the struct i.e. where meta data is stored
 block get_ptr(void * ptr){
@@ -212,6 +204,8 @@ return size;
 
 }
 
+
+//Thread-safe malloc with locks 
 void * ts_malloc_lock(size_t size){
 
 pthread_mutex_lock(&lock);
@@ -267,15 +261,13 @@ else { //Size is greater than zero
 				}
 
 			}
-
+		}
 	}
 
 }
 
-}
 
-
-
+//Thread safe free with lock
 void ts_free_lock(void * ptr){
 
     pthread_mutex_lock(&lock);
@@ -303,10 +295,8 @@ void ts_free_lock(void * ptr){
 }
 
 
-
+//Thread-safe malloc with no locks
 void *ts_malloc_nolock(size_t size){
-
-
 if( size <= 0){ //Requested size is less than zero
 	return NULL;
 }
@@ -355,14 +345,12 @@ else { //Size is greater than zero
 				}
 
 			}
-
-	}
+		}
+}
 
 }
 
-
-}
-
+//Thread-safe free with no locks
 void ts_free_nolock(void *ptr){
 
 	if (!ptr){
