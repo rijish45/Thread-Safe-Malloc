@@ -38,7 +38,5 @@ block find_best_fit_block_BF_NL(block * last, size_t size); //No-lock version
 //Other necessary functions to implement malloc and free
 block new_space(block last, size_t size);
 void split_block(block mblock, size_t size);
-void coalesce(block my_block)
-
-
+void coalesce(block my_block);
 #endif
