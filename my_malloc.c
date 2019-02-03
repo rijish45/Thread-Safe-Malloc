@@ -51,6 +51,43 @@ return current; //may return NULL
 }
 
 
+block find_best_fit_block_BF_NL(block * last, size_t size){
+
+	//Find the optimum block first 
+	block best_block = NULL; 
+	block current = global_head; 
+
+	while(current != NULL) { 
+	  if ((current->free && (current->size >= size + BLOCK_SIZE)) && (best_block == NULL || current->size < BLOCK_SIZE + best_block->size)) {
+			 best_block = current; //assign the best block
+			 if(best_block->size == size + BLOCK_SIZE) //break for optimization
+			   break;
+ 		}
+		
+		current = current->next; //normal iteration
+	} 
+
+ 
+
+//Now assign the last block for requesting space in later situation
+current = global_head;
+//This loop is to assign the last node for requesting space
+while(current != NULL){
+		
+		if(((best_block - current) == 0))
+			return current;
+		*last = current; //Assigned the last node if we haven't found a best block
+		current = current->next;
+	}
+
+return current; //may return NULL
+}
+
+
+
+
+
+
 /* If we don't find a free block, then we need to request it from OS using sbrk
 sbrk(0) returns a pointer to the current top of the heap
 sbrk(num) increments process data segment by num and returns a pointer to the previous top of the heap before change */
@@ -269,7 +306,6 @@ void ts_free_lock(void * ptr){
 
 void *ts_malloc_nolock(size_t size){
 
-pthread_mutex_lock(&lock);
 
 if( size <= 0){ //Requested size is less than zero
 	return NULL;
@@ -279,14 +315,14 @@ else { //Size is greater than zero
 	block my_block;
 	block last_block;
 
-	if(head == NULL){ //We are calling malloc for the first time, the head of the Linked List is NULL
+	if(global_head == NULL){ //We are calling malloc for the first time, the head of the Linked List is NULL
 
 		my_block = new_space(NULL, size); //Request new space
 		if(!my_block){ //if my_block is NULL
 			return NULL;
 		}
 		else{ //my_block is not NULL
-			head = my_block; //Assign the head of the linked list
+			global_head = my_block; //Assign the head of the linked list
 			//pthread_mutex_unlock(&lock);
 			return (my_block + 1);
 		}
@@ -294,7 +330,7 @@ else { //Size is greater than zero
 
 	else{ //head is not NULL, malloc has been used atleast once
 
-			last_block = head;
+			last_block = global_head;
         	my_block = find_best_fit_block_BF(&last_block, size); //Search for the free block of memory
 			if(my_block != NULL){ //suitable block is found
 				
