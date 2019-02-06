@@ -175,8 +175,8 @@ NO-LOCK VERSION
 | 	4      |  0.199377	   |   48729536      |
 | 	5	   |  0.218044	   |   48729536      |
 
-**Average Execution Time**: 0.196872 seconds
-**Average Data-Segment Size**: 48729536 bytes
+**Average Execution Time**: 0.196872 seconds.  
+**Average Data-Segment Size**: 48729536 bytes.  
 
 
 Analysis:
