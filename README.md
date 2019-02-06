@@ -150,7 +150,7 @@ Performance and Analysis
 ========================
 
 
-With Lock
+LOCK VERSION
 -------------
 
 | 	Run    | Execution Time|  Data Segment   | 
@@ -161,7 +161,10 @@ With Lock
 | 	4  	   |  107.89101    |  42780736       |
 | 	5	   |  104.72402    |  42775808       |
 
-Without Lock
+**Average Execution Time**: 105.9537 seconds
+**Average Data-Segment Size**: 42894061 bytes
+
+NO-LOCK VERSION
 ---------------
 
 | 	Run    | Execution Time|  Data Segment   |
@@ -172,9 +175,15 @@ Without Lock
 | 	4      |  0.199377	   |   48729536      |
 | 	5	   |  0.218044	   |   48729536      |
 
+**Average Execution Time**: 0.196872 seconds
+**Average Data-Segment Size**: 48729536 bytes
+
 
 Analysis:
 ---------
+
+We expected that the thread-safe implementation with locks would take more time to execute as each thread has to acquire a lock before a critical section is executed. THe other threads need to wait before the lock gets released. We expected the locked version to have a smaller data segment size as each thread in the lockless version has it's own linked-list.
+Our experimental data agrees with our theory as we observe that the average execution time for the lock-less version is 0.196872 seconds which is much smaller compared to the execution time of the lock version which was about 105.9537 seconds. We also observe that the average data segment size for the lock-less version is greater than the lock version, we serves as a testament to our initial theory.
 
 
 
